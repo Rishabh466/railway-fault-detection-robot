@@ -3,7 +3,11 @@
 ## System Architecture
 
 <p align="center">
-  <img src="railway-robo-flow.png" alt="System Flow Diagram" width="800"/>
+  <a href="railway-robo-flow.png">
+    <img src="railway-robo-flow.png" alt="System Flow Diagram" width="800"/>
+  </a>
+  <br>
+  <em>Click image to view full size</em>
 </p>
 
 ## Introduction
