@@ -1,0 +1,167 @@
+#include <LiquidCrystal.h>
+#include <TinyGPS++.h>
+#include <SoftwareSerial.h>
+
+// ---------------- Pin Configuration ----------------
+#define TRIG_PIN 9
+#define ECHO_PIN 8
+#define LEFT_MOTOR_FWD 5
+#define LEFT_MOTOR_BWD 4
+#define RIGHT_MOTOR_FWD 7
+#define RIGHT_MOTOR_BWD 6
+
+// ---------------- Modules and Interfaces ----------------
+LiquidCrystal lcd(12, 11, 10, 3, 2, 13);
+TinyGPSPlus gps;
+SoftwareSerial gpsSerial(14, 15);   // RX, TX for GPS (A0, A1)
+SoftwareSerial gsmSerial(16, 17);   // RX, TX for GSM (A2, A3)
+
+// ---------------- Global Variables ----------------
+long duration;
+float distance;
+float threshold = 3.0;  // cm difference indicating crack
+bool faultDetected = false;
+unsigned long lastSmsSent = 0;
+
+// ---------------- Function Declarations ----------------
+void moveForward();
+void stopMotors();
+float measureDistance();
+void sendAlertSMS(float lat, float lon);
+void displayStatus(String msg);
+void handleCrackDetection();
+
+// ---------------- Setup ----------------
+void setup() {
+  Serial.begin(9600);
+  gpsSerial.begin(9600);
+  gsmSerial.begin(9600);
+
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(LEFT_MOTOR_FWD, OUTPUT);
+  pinMode(LEFT_MOTOR_BWD, OUTPUT);
+  pinMode(RIGHT_MOTOR_FWD, OUTPUT);
+  pinMode(RIGHT_MOTOR_BWD, OUTPUT);
+
+  lcd.begin(16, 2);
+  lcd.clear();
+  lcd.print("RAILWAY ROBOT v1.0");
+  delay(2000);
+  lcd.clear();
+
+  displayStatus("Initializing GSM...");
+  gsmSerial.println("AT");
+  delay(1000);
+  gsmSerial.println("AT+CMGF=1"); // Text mode
+  delay(1000);
+  displayStatus("System Ready!");
+  delay(1000);
+}
+
+// ---------------- Loop ----------------
+void loop() {
+  handleCrackDetection();
+
+  // Keep moving
+  moveForward();
+  delay(500);
+}
+
+// ---------------- Core Functions ----------------
+
+// Detect cracks using ultrasonic sensor
+void handleCrackDetection() {
+  distance = measureDistance();
+  Serial.print("Distance: ");
+  Serial.println(distance);
+
+  if (distance > threshold) {
+    stopMotors();
+    displayStatus("Crack Detected!");
+    faultDetected = true;
+
+    float lat = 0.0, lon = 0.0;
+
+    unsigned long start = millis();
+    while (millis() - start < 3000) {
+      while (gpsSerial.available()) {
+        gps.encode(gpsSerial.read());
+        if (gps.location.isUpdated()) {
+          lat = gps.location.lat();
+          lon = gps.location.lng();
+        }
+      }
+    }
+
+    if (lat != 0.0 && lon != 0.0) {
+      sendAlertSMS(lat, lon);
+    } else {
+      displayStatus("No GPS Fix");
+    }
+
+    delay(5000);
+    faultDetected = false;
+  }
+}
+
+// Measure distance using ultrasonic sensor
+float measureDistance() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  duration = pulseIn(ECHO_PIN, HIGH, 30000);
+  return duration * 0.034 / 2;
+}
+
+// Control robot movement
+void moveForward() {
+  digitalWrite(LEFT_MOTOR_FWD, HIGH);
+  digitalWrite(LEFT_MOTOR_BWD, LOW);
+  digitalWrite(RIGHT_MOTOR_FWD, HIGH);
+  digitalWrite(RIGHT_MOTOR_BWD, LOW);
+}
+
+void stopMotors() {
+  digitalWrite(LEFT_MOTOR_FWD, LOW);
+  digitalWrite(LEFT_MOTOR_BWD, LOW);
+  digitalWrite(RIGHT_MOTOR_FWD, LOW);
+  digitalWrite(RIGHT_MOTOR_BWD, LOW);
+}
+
+// Display status on LCD
+void displayStatus(String msg) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Status:");
+  lcd.setCursor(0, 1);
+  lcd.print(msg);
+  Serial.println("[LCD] " + msg);
+}
+
+// Send alert SMS using GSM module
+void sendAlertSMS(float lat, float lon) {
+  unsigned long now = millis();
+  if (now - lastSmsSent < 60000) return;  // Avoid flooding
+
+  displayStatus("Sending SMS...");
+  gsmSerial.println("AT+CMGF=1");
+  delay(1000);
+  gsmSerial.println("AT+CMGS=\"+911234567890\""); // Replace with your number
+  delay(1000);
+
+  gsmSerial.print("Railway Crack Detected!\n");
+  gsmSerial.print("Location: ");
+  gsmSerial.print(lat, 6);
+  gsmSerial.print(", ");
+  gsmSerial.println(lon, 6);
+  gsmSerial.print("Immediate maintenance required.");
+
+  gsmSerial.write(26); // Ctrl+Z
+  delay(3000);
+
+  displayStatus("SMS Sent!");
+  lastSmsSent = now;
+}
