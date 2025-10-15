@@ -1,5 +1,11 @@
 # Railway Track Fault Detection Robot
 
+## System Architecture
+
+<p align="center">
+  <img src="railway-robo-flow.png" alt="System Flow Diagram" width="800"/>
+</p>
+
 ## Introduction
 Railway transport is one of the most widely used and cost-effective means of transportation. However, accidents due to broken or cracked railway tracks continue to pose serious safety hazards. Manual inspection is time-consuming, inefficient, and prone to human error.  
 This project presents a **low-cost, autonomous robot** designed to detect faults or cracks in railway tracks using **ultrasonic sensors** and report their GPS location to authorities through a **GSM module**. The system aims to enhance railway safety by providing early fault detection and real-time alert transmission.
